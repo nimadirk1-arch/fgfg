@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Liberty City — O'zbekcha 3D Ochiq Dunyo</title>
+<link rel="icon" href="data:,">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
   html, body {
@@ -185,6 +186,41 @@
   #play:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 10px 32px rgba(255,200,50,.6); }
   .foot { margin-top: 14px; font-size: 10px; letter-spacing: 1.4px; color: #6d7781; text-transform: uppercase; }
 
+  /* ---------- do'kon oynasi ---------- */
+  #shop {
+    position: absolute; inset: 0; z-index: 75; display: none;
+    align-items: center; justify-content: center; padding: 20px;
+    background: rgba(5,8,12,.74); backdrop-filter: blur(7px);
+  }
+  #shop.show { display: flex; }
+  .shop-panel {
+    width: min(560px, 100%); max-height: 88vh; overflow: auto; padding: 20px 22px 18px;
+    background: rgba(14,19,25,.98); border: 1px solid #3d4a56; border-top: 3px solid #f5c518;
+    border-radius: 6px; box-shadow: 0 22px 70px rgba(0,0,0,.9);
+  }
+  .shop-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+    border-bottom: 1px solid rgba(255,255,255,.1); padding-bottom: 12px; margin-bottom: 14px; }
+  .shop-kicker { font-size: 9px; letter-spacing: 3.5px; color: #7f8b96; font-weight: 700; }
+  .shop-top h2 { font-family: 'Impact','Arial Black',sans-serif; font-size: 25px; letter-spacing: 2px; color: #f5c518; margin-top: 3px; }
+  .shop-cash { text-align: right; font-size: 9px; letter-spacing: 2px; color: #8b95a0; line-height: 1.5; white-space: nowrap; }
+  .shop-cash b { display: block; font-family: 'Impact',sans-serif; font-size: 23px; color: #35e07f; letter-spacing: 1px; }
+  .shop-item { display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    padding: 10px 12px; border: 1px solid rgba(255,255,255,.08); border-radius: 4px;
+    margin-bottom: 7px; background: rgba(255,255,255,.025); }
+  .si-name { font-size: 14px; font-weight: 700; color: #eef3f7; }
+  .si-desc { font-size: 11px; color: #8b95a0; margin-top: 3px; }
+  .si-buy { background: #1f7a4a; color: #fff; border: 1px solid #35e07f; padding: 8px 12px;
+    border-radius: 3px; font-weight: 800; font-size: 11.5px; letter-spacing: .5px; cursor: pointer; white-space: nowrap; }
+  .si-buy:hover:not(:disabled) { background: #28975c; }
+  .si-buy:disabled { opacity: .4; cursor: not-allowed; }
+  #shop-msg { min-height: 17px; font-size: 12px; font-weight: 700; margin: 6px 0 12px; color: #f5c518; }
+  #shop-msg.err { color: #ff6b5e; }
+  #shop-msg.ok { color: #35e07f; }
+  #shop-close { width: 100%; padding: 12px; background: #2a333c; color: #dfe6ec; border: 1px solid #46525e;
+    border-radius: 4px; font-weight: 800; letter-spacing: 2px; cursor: pointer; font-size: 11.5px; }
+  #shop-close:hover { background: #37424d; }
+  #shop-close span { color: #8b95a0; margin-left: 6px; }
+
   /* ---------- cash popups ---------- */
   .cash-pop {
     position: absolute; z-index: 20; pointer-events: none; font-family: 'Impact',sans-serif;
@@ -249,6 +285,21 @@
   <span><b>F</b> Mashina</span>
   <span><b>R</b> O'qdon</span>
   <span><b>E</b> Signal</span>
+</div>
+
+<div id="shop">
+  <div class="shop-panel">
+    <div class="shop-top">
+      <div>
+        <div class="shop-kicker">LIBERTY CITY · DO'KON</div>
+        <h2 id="shop-title">DO'KON</h2>
+      </div>
+      <div class="shop-cash">PULINGIZ<b id="shop-money">0</b>SO'M</div>
+    </div>
+    <div id="shop-items"></div>
+    <div id="shop-msg"></div>
+    <button id="shop-close">YOPISH <span>[ESC]</span></button>
+  </div>
 </div>
 
 <div id="wasted">
@@ -653,9 +704,14 @@ const matGround = new CANNON.Material('ground');
 const matCar = new CANNON.Material('car');
 const matPlayer = new CANNON.Material('player');
 
-world.addContactMaterial(new CANNON.ContactMaterial(matGround, matCar, { friction: 0.42, restitution: 0.04 }));
-world.addContactMaterial(new CANNON.ContactMaterial(matGround, matPlayer, { friction: 0.02, restitution: 0 }));
-world.addContactMaterial(new CANNON.ContactMaterial(matCar, matCar, { friction: 0.32, restitution: 0.18 }));
+// Mashina tezligini arcade model boshqaradi — yer ishqalanishi past bo'lishi shart,
+// aks holda kontakt solver har kadrda tezlikni "yeb" qo'yadi.
+// Ishqalanish 0 bo'lishi shart: cannon-es uni impuls sifatida har iteratsiyada
+// qo'llaydi va mashina tezligini bir kadrda "yeb" qo'yadi. Tirgakni arcade
+// model (lateral grip + drag) boshqaradi.
+world.addContactMaterial(new CANNON.ContactMaterial(matGround, matCar, { friction: 0, restitution: 0.02 }));
+world.addContactMaterial(new CANNON.ContactMaterial(matGround, matPlayer, { friction: 0, restitution: 0 }));
+world.addContactMaterial(new CANNON.ContactMaterial(matCar, matCar, { friction: 0.18, restitution: 0.2 }));
 world.addContactMaterial(new CANNON.ContactMaterial(matCar, matPlayer, { friction: 0.1, restitution: 0.2 }));
 
 const groundBody = new CANNON.Body({
@@ -678,6 +734,7 @@ const GAME = {
   vehicle: null, aimTimer: 0, time: 72,
   shake: 0, grounded: true, jumpQueued: false,
   camYaw: 0, camPitch: 0.24, dayFactor: 1, lastDamage: 0,
+  paused: false, shop: null, shopNear: null,
   kills: 0, carsStolen: 0
 };
 GAME.money = 500000;
@@ -1068,6 +1125,9 @@ class Vehicle {
     this.ai = null;
     this.lastCrash = 0;
     this.lastRam = 0;
+    this.stuck = 0;
+    this.reverse = 0;
+    this.reverseSteer = 0;
     this.occupied = false;
 
     this.mesh = new THREE.Group();
@@ -1082,7 +1142,7 @@ class Vehicle {
       material: matCar,
       position: new CANNON.Vec3(x, 0.9, z),
       angularDamping: 0.82,
-      linearDamping: 0.02,
+      linearDamping: 0.0,
       allowSleep: false,
       collisionFilterGroup: GROUP.VEHICLE,
       collisionFilterMask: GROUP.GROUND | GROUP.WORLD | GROUP.PLAYER | GROUP.VEHICLE
@@ -1248,8 +1308,8 @@ class Vehicle {
       vf += throttle * power * dt;
     }
 
-    // harakat qarshiligi
-    vf -= vf * (handbrake ? 3.4 : 0.6) * dt;
+    // harakat qarshiligi (gaz bo'shatilganda tezroq to'xtaydi)
+    vf -= vf * (handbrake ? 3.4 : throttle === 0 ? 1.7 : 0.35) * dt;
     vf = clamp(vf, -maxSpeed * 0.42, maxSpeed);
 
     // lateral grip
@@ -1278,8 +1338,8 @@ const _UP = new THREE.Vector3(0, 1, 0);
 function createVehicles() {
   // Parkda turgan mashinalar
   const parked = [
-    new Vehicle('taxi', 23, -33, 0),
-    new Vehicle('sedan', 33, -26, Math.PI / 2),
+    new Vehicle('taxi', 23, -33, Math.PI / 2),
+    new Vehicle('sedan', 33, -27, -Math.PI / 2),
     new Vehicle('sports', 13, -49, -Math.PI / 2)
   ];
   parked.forEach((v) => vehicles.push(v));
@@ -1383,7 +1443,7 @@ function updateTraffic(car, dt) {
   const dz = tz - car.body.position.z;
   const dist = Math.hypot(dx, dz);
 
-  if (dist < 7) {
+  if (dist < 9) {
     const prev = ai.node;
     ai.node = pickNextNode(car);
     if (ai.node === prev) return;
@@ -1406,11 +1466,14 @@ function updateTraffic(car, dt) {
     if (ahead > 0.72) brake = Math.min(brake, clamp((od - 3) / 7, 0, 1));
   }
 
-  const throttle = (Math.abs(diff) > 1.0 ? 0.42 : 1) * clamp(brake, 0.12, 1) * ai.speedSeed;
+  // Maqsadli tezlik: burilishda sekin, to'g'rida ~12 m/s
+  const cruise = (Math.abs(diff) > 0.45 ? 6.5 : 12.5) * ai.speedSeed;
+  let throttle = clamp((cruise - car.speed) * 0.5, 0, 1);
+  throttle *= clamp(brake, 0, 1);
 
   if (ai.reverse > 0) {
     ai.reverse -= dt;
-    car.drive(-0.7, -steer, false, dt);
+    car.drive(-0.8, -steer, false, dt);
   } else {
     car.drive(throttle, steer, false, dt);
   }
@@ -1451,13 +1514,45 @@ function updatePolice(dt, now) {
     const dz = target.z - p.body.position.z;
     const dist = Math.hypot(dx, dz);
 
-    if (dist > 220) { p.drive(0, 0, true, dt); continue; }
+    if (dist > 260) { p.drive(0, 0, true, dt); continue; }
 
-    const desired = Math.atan2(dx, dz);
+    // Uzoqdan kelsa — ko'cha tarmog'i bo'ylab yaqinlashadi (binolarga urilib qotmasligi uchun)
+    let tx = target.x;
+    let tz = target.z;
+    if (dist > 42) {
+      const myNode = nearestNodeIndex(p.body.position.x, p.body.position.z);
+      let bestIdx = myNode;
+      let bestDist = Math.hypot(NODES[myNode].x - target.x, NODES[myNode].z - target.z);
+      for (const idx of nodeNeighbors(myNode)) {
+        const n = NODES[idx];
+        const d = Math.hypot(n.x - target.x, n.z - target.z);
+        if (d < bestDist) { bestDist = d; bestIdx = idx; }
+      }
+      tx = NODES[bestIdx].x;
+      tz = NODES[bestIdx].z;
+    }
+
+    const desired = Math.atan2(tx - p.body.position.x, tz - p.body.position.z);
     const diff = wrapAngle(desired - p.yaw);
     const steer = clamp(diff * 2.4, -1, 1);
-    const throttle = dist > 7 ? 1 : dist > 4 ? 0.55 : 0;
-    p.drive(throttle, steer, dist < 5, dt);
+
+    // Qotib qolgan bo'lsa orqaga qaytib, qayta urinadi
+    if (Math.abs(p.speed) < 1.0) p.stuck += dt;
+    else p.stuck = Math.max(0, p.stuck - dt * 2.5);
+    if (p.stuck > 1.8) {
+      p.stuck = 0;
+      p.reverse = 1.15;
+      p.reverseSteer = diff > 0 ? -1 : 1;
+    }
+
+    if (p.reverse > 0) {
+      p.reverse -= dt;
+      p.drive(-0.9, p.reverseSteer, false, dt);
+    } else {
+      const cruise = dist > 42 ? 21 : 23;
+      const throttle = clamp((cruise - Math.max(0, p.speed)) * 0.55, 0, 1);
+      p.drive(throttle, steer, dist < 5.5 && Math.abs(p.speed) > 5, dt);
+    }
 
     if (dist < 5.2 && Math.abs(p.speed) > 4 && now - p.lastRam > 1300) {
       p.lastRam = now;
@@ -1631,13 +1726,135 @@ class Pedestrian {
 }
 
 function createPedestrians() {
-  const spawnBlocks = BLOCK_CENTERS.filter((x) => x !== lotBlock.x);
-  for (let i = 0; i < 12; i++) {
+  const spawnBlocks = BLOCK_CENTERS;
+  for (let i = 0; i < 18; i++) {
     const cx = spawnBlocks[Math.floor(Math.random() * spawnBlocks.length)];
     const cz = BLOCK_CENTERS[Math.floor(Math.random() * BLOCK_CENTERS.length)];
     const p = new Pedestrian(cx, cz);
     pedestrians.push(p);
   }
+}
+
+/* =========================================================================
+   9.5. DO'KONLAR (kiyim, qurol, oziq-ovqat)
+   ========================================================================= */
+const shopMarkers = [];
+const SHOPS = [
+  {
+    id: 'food',
+    title: "OZIQ-OVQAT DO'KONI",
+    sign: 'OZIQ-OVQAT',
+    accent: '#4ee08a',
+    hex: 0x4ee08a,
+    x: 22, z: -20,
+    items: [
+      { id: 'osh', name: 'Osh (palov)', desc: 'Salomatlik +35%', price: 25000, canBuy: () => GAME.health < 100, buy: () => healPlayer(35) },
+      { id: 'somsa', name: 'Somsa (2 dona)', desc: 'Salomatlik +15%', price: 12000, canBuy: () => GAME.health < 100, buy: () => healPlayer(15) },
+      { id: 'energetik', name: 'Energetik ichimlik', desc: 'Salomatlik +25%', price: 18000, canBuy: () => GAME.health < 100, buy: () => healPlayer(25) },
+      { id: 'non', name: 'Non va qatiq', desc: 'Salomatlik +10%', price: 8000, canBuy: () => GAME.health < 100, buy: () => healPlayer(10) }
+    ]
+  },
+  {
+    id: 'clothes',
+    title: "KIYIM-BOSH DO'KONI",
+    sign: 'KIYIM-BOSH',
+    accent: '#5ab0ff',
+    hex: 0x5ab0ff,
+    x: 40, z: -20,
+    items: [
+      { id: 'jacket_black', name: 'Qora charm kurtka', desc: "Ko'cha uslubi · kurtka rangi", price: 60000, once: true, buy: () => jacketMat.color.setHex(0x17191d) },
+      { id: 'jacket_army', name: 'Harbiy kurtka', desc: 'Zaytun rangli kurtka', price: 40000, once: true, buy: () => jacketMat.color.setHex(0x3c4a2f) },
+      { id: 'suit', name: 'Biznes kostyum', desc: 'Navy kurtka va shim', price: 120000, once: true, buy: () => { jacketMat.color.setHex(0x1c2836); jeansMat.color.setHex(0x1a2028); } }
+    ]
+  },
+  {
+    id: 'weapons',
+    title: "QUROL DO'KONI",
+    sign: 'QUROL',
+    accent: '#ff6b5e',
+    hex: 0xff6b5e,
+    x: 58, z: -20,
+    items: [
+      { id: 'ammo30', name: "O'q-dorilar (30 ta)", desc: 'AK-47 uchun', price: 15000, buy: () => { GAME.ammoTotal += 30; } },
+      { id: 'ammo90', name: "O'q-dorilar (90 ta)", desc: 'Katta quti', price: 38000, buy: () => { GAME.ammoTotal += 90; } },
+      { id: 'armor', name: 'Zirhli jilet', desc: 'Zirhni 100% gacha to\'ldiradi', price: 60000, canBuy: () => GAME.armor < 100, buy: () => { GAME.armor = 100; } },
+      { id: 'medkit', name: 'Birinchi yordam', desc: 'Salomatlik +50%', price: 20000, canBuy: () => GAME.health < 100, buy: () => healPlayer(50) }
+    ]
+  }
+];
+
+function healPlayer(n) {
+  GAME.health = Math.min(100, GAME.health + n);
+  updateHealthUI();
+}
+
+function createShopBuilding(shop) {
+  const group = new THREE.Group();
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0x2b3239, roughness: 0.82, metalness: 0.1 });
+  const base = new THREE.Mesh(new THREE.BoxGeometry(9, 4.4, 6), wallMat);
+  base.position.y = 2.2;
+  base.castShadow = true;
+  base.receiveShadow = true;
+  group.add(base);
+
+  const roofTrim = new THREE.Mesh(new THREE.BoxGeometry(9.3, 0.35, 6.3), matDark);
+  roofTrim.position.y = 4.45;
+  group.add(roofTrim);
+
+  const glass = new THREE.Mesh(
+    new THREE.PlaneGeometry(8.2, 2.3),
+    new THREE.MeshStandardMaterial({ color: 0x101d26, emissive: shop.hex, emissiveIntensity: 0.32, roughness: 0.15, metalness: 0.7 })
+  );
+  glass.position.set(0, 1.75, 3.03);
+  group.add(glass);
+
+  const door = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.6), new THREE.MeshStandardMaterial({ color: 0x0a1014, roughness: 0.3, metalness: 0.6 }));
+  door.position.set(-2.9, 1.35, 3.04);
+  group.add(door);
+
+  const awning = new THREE.Mesh(new THREE.BoxGeometry(9.4, 0.18, 1.5), new THREE.MeshStandardMaterial({ color: shop.hex, roughness: 0.75 }));
+  awning.position.set(0, 3.4, 3.6);
+  awning.castShadow = true;
+  group.add(awning);
+
+  const signTex = makeTexture(neonTexture(shop.sign, shop.accent), 1, 1);
+  signTex.wrapS = signTex.wrapT = THREE.ClampToEdgeWrapping;
+  const signBack = new THREE.Mesh(new THREE.BoxGeometry(8.8, 2.3, 0.2), matDark);
+  signBack.position.set(0, 5.45, 2.95);
+  group.add(signBack);
+  const sign = new THREE.Mesh(
+    new THREE.PlaneGeometry(8.4, 2.1),
+    new THREE.MeshBasicMaterial({ map: signTex, transparent: true, toneMapped: false, depthWrite: false })
+  );
+  sign.position.set(0, 5.45, 3.07);
+  group.add(sign);
+
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(1.35, 0.09, 6, 22),
+    new THREE.MeshBasicMaterial({ color: shop.hex, transparent: true, opacity: 0.85, toneMapped: false })
+  );
+  ring.rotation.x = Math.PI / 2;
+  ring.position.set(0, 0.14, 4.6);
+  group.add(ring);
+
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: TEX.glow, color: shop.hex, transparent: true, opacity: 0.45,
+    blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false
+  }));
+  glow.scale.set(3.2, 3.2, 1);
+  glow.position.set(0, 2.3, 4.6);
+  group.add(glow);
+
+  group.position.set(shop.x, 0.05, shop.z);
+  scene.add(group);
+  addStaticBox(shop.x, shop.z, 9, 4.4, 6);
+  shopMarkers.push({ ring, glow });
+  shop.doorX = shop.x;
+  shop.doorZ = shop.z + 4.6;
+}
+
+function createShops() {
+  SHOPS.forEach(createShopBuilding);
 }
 
 /* =========================================================================
@@ -1765,6 +1982,103 @@ function cashPopup(amount) {
 function flashDamage() {
   el.flash.style.opacity = '0.9';
   requestAnimationFrame(() => { el.flash.style.opacity = '0'; });
+}
+
+/* ---------------- do'kon oynasi ---------------- */
+function shopMessage(text, kind = '') {
+  const m = $('shop-msg');
+  m.textContent = text;
+  m.className = kind;
+}
+
+function renderShop() {
+  const shop = GAME.shop;
+  if (!shop) return;
+  $('shop-money').textContent = fmt(GAME.money);
+  $('shop-title').textContent = shop.title;
+  const wrap = $('shop-items');
+  wrap.innerHTML = '';
+
+  for (const item of shop.items) {
+    const owned = !!item.bought;
+    const affordable = GAME.money >= item.price;
+    const allowed = !item.canBuy || item.canBuy();
+
+    const row = document.createElement('div');
+    row.className = 'shop-item';
+    const info = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'si-name';
+    name.textContent = item.name;
+    const desc = document.createElement('div');
+    desc.className = 'si-desc';
+    desc.textContent = item.desc;
+    info.appendChild(name);
+    info.appendChild(desc);
+
+    const btn = document.createElement('button');
+    btn.className = 'si-buy';
+    btn.textContent = owned ? 'SOTIB OLINGAN' : fmt(item.price) + " SO'M";
+    btn.disabled = owned || !affordable || !allowed;
+    btn.addEventListener('click', () => buyItem(shop, item));
+
+    row.appendChild(info);
+    row.appendChild(btn);
+    wrap.appendChild(row);
+  }
+}
+
+function buyItem(shop, item) {
+  if (!GAME.shop || GAME.shop !== shop) return;
+  if (item.bought) return;
+  if (GAME.money < item.price) {
+    shopMessage('Pul yetarli emas! Ko\'proq pul toping.', 'err');
+    return;
+  }
+  if (item.canBuy && !item.canBuy()) {
+    shopMessage('Hozir buni sotib olish shart emas.', 'err');
+    return;
+  }
+  GAME.money -= item.price;
+  item.buy();
+  if (item.once) item.bought = true;
+  updateMoneyUI();
+  updateHealthUI();
+  updateAmmoUI();
+  sfx.cash();
+  shopMessage('Xarid qilindi: ' + item.name, 'ok');
+  renderShop();
+}
+
+function nearestShop() {
+  if (GAME.vehicle || GAME.dead) return null;
+  let best = null;
+  let bestDist = 4.4;
+  for (const s of SHOPS) {
+    const d = Math.hypot(playerBody.position.x - s.doorX, playerBody.position.z - s.doorZ);
+    if (d < bestDist) { bestDist = d; best = s; }
+  }
+  return best;
+}
+
+function openShop(shop) {
+  if (!shop || GAME.dead) return;
+  GAME.paused = true;
+  GAME.shop = shop;
+  for (const k in keys) keys[k] = false;
+  if (document.pointerLockElement) document.exitPointerLock();
+  $('shop').classList.add('show');
+  shopMessage('');
+  renderShop();
+}
+
+function closeShop() {
+  if (!GAME.shop) return;
+  GAME.shop = null;
+  GAME.paused = false;
+  for (const k in keys) keys[k] = false;
+  $('shop').classList.remove('show');
+  if (!GAME.dead) lockPointer();
 }
 
 /* =========================================================================
@@ -2019,6 +2333,7 @@ function respawn() {
   headlights.forEach((h) => { h.intensity = 0; });
   el.speedo.style.display = 'none';
   el.crosshair.classList.remove('hidden');
+  for (const k in keys) keys[k] = false;
 
   playerMesh.position.copy(playerBody.position);
   playerMesh.position.y -= PLAYER_RADIUS;
@@ -2270,6 +2585,14 @@ function drawMinimap(now) {
     mini.fillRect((p.x - px) * MINI_SCALE - 1, (p.z - pz) * MINI_SCALE - 1, 2, 2);
   }
 
+  // Do'konlar
+  for (const s of SHOPS) {
+    const sx = (s.x - px) * MINI_SCALE;
+    const sy = (s.z - pz) * MINI_SCALE;
+    mini.fillStyle = s.accent;
+    mini.fillRect(sx - 3, sy - 3, 6, 6);
+  }
+
   // Pul
   mini.fillStyle = '#45ff9a';
   for (const c of pickups) {
@@ -2314,11 +2637,19 @@ function lockPointer() {
 function onKeyDown(e) {
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (!GAME.started) return;
+  if (e.code === 'Escape') {
+    if (GAME.shop) closeShop();
+    return;
+  }
+  if (GAME.paused || GAME.dead) return;
   keys[e.code] = true;
 
   if (e.code === 'KeyF') toggleVehicle();
   if (e.code === 'KeyR') reload();
-  if (e.code === 'KeyE' && GAME.vehicle) sfx.horn();
+  if (e.code === 'KeyE') {
+    if (GAME.vehicle) sfx.horn();
+    else if (GAME.shopNear) openShop(GAME.shopNear);
+  }
   if (e.code === 'Space' && !GAME.vehicle) GAME.jumpQueued = true;
 }
 
@@ -2335,13 +2666,13 @@ function onMouseMove(e) {
 }
 
 function onMouseDown(e) {
-  if (e.button !== 0 || !GAME.started || GAME.dead) return;
+  if (e.button !== 0 || !GAME.started || GAME.dead || GAME.paused) return;
   if (document.pointerLockElement !== canvas) return;
   shoot();
 }
 
 canvas.addEventListener('click', () => {
-  if (GAME.started && !GAME.dead && !document.pointerLockElement) lockPointer();
+  if (GAME.started && !GAME.dead && !GAME.paused && !document.pointerLockElement) lockPointer();
 });
 document.addEventListener('pointerlockchange', () => {
   GAME.locked = document.pointerLockElement === canvas;
@@ -2575,6 +2906,13 @@ function updateWorldObjects(dt, now) {
     }
   }
 
+  // Do'kon belgilari pulsatsiyasi
+  const pulse = 1 + Math.sin(now * 0.004) * 0.12;
+  for (const m of shopMarkers) {
+    m.ring.scale.setScalar(pulse);
+    m.glow.material.opacity = 0.32 + Math.abs(Math.sin(now * 0.004)) * 0.28;
+  }
+
   // Shake
   GAME.shake *= Math.exp(-5 * dt);
 }
@@ -2646,9 +2984,13 @@ function updateHUD(dt) {
 
   if (el.speedo.style.display !== 'none') el.speedo.style.display = 'none';
 
+  GAME.shopNear = nearestShop();
   const near = nearestVehicle();
   tooltipVehicle = near;
-  if (near && !GAME.dead) {
+  if (GAME.shopNear) {
+    el.tooltip.style.display = 'block';
+    el.tooltip.textContent = '[E] - ' + GAME.shopNear.sign + " do'koniga kirish";
+  } else if (near && !GAME.dead) {
     el.tooltip.style.display = 'block';
     el.tooltip.textContent = '[F] - Mashinaga o\'tirish';
   } else {
@@ -2677,6 +3019,12 @@ function step(now) {
   if (!GAME.started) {
     // Menyu orqasida shahar aylanib turadi
     updateDayNight(dt * 0.3);
+    renderer.render(scene, camera);
+    return;
+  }
+
+  if (GAME.paused) {
+    // Do'kon oynasi ochiq — dunyo to'xtaydi
     renderer.render(scene, camera);
     return;
   }
@@ -2728,6 +3076,7 @@ function step(now) {
    ========================================================================= */
 function init() {
   buildCity();
+  createShops();
   createVehicles();
   createPedestrians();
   seedPickups();
@@ -2758,13 +3107,18 @@ function init() {
     respawn();
   });
 
+  $('shop-close').addEventListener('click', () => {
+    sfx.init();
+    closeShop();
+  });
+
   requestAnimationFrame(step);
 }
 
 init();
 
 /* Test / debug uchun ochiq API */
-window.GAME_DEBUG = { GAME, scene, camera, renderer, world, vehicles, policeCars, trafficCars, pedestrians, pickups, playerBody, playerMesh, shoot, addWanted, damagePlayer, enterVehicle, exitVehicle, NODES, buildingBoxes };
+window.GAME_DEBUG = { GAME, scene, camera, renderer, world, vehicles, policeCars, trafficCars, pedestrians, pickups, playerBody, playerMesh, shoot, addWanted, damagePlayer, enterVehicle, exitVehicle, NODES, buildingBoxes, SHOPS, openShop, closeShop, nearestShop };
 </script>
 </body>
 </html>
